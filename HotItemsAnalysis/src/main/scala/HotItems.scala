@@ -1,6 +1,8 @@
 import java.sql.Timestamp
+import java.util.Properties
 
 import org.apache.flink.api.common.functions.AggregateFunction
+import org.apache.flink.api.common.serialization.SimpleStringSchema
 import org.apache.flink.api.common.state.{ListState, ListStateDescriptor}
 import org.apache.flink.api.java.tuple.{Tuple, Tuple1}
 import org.apache.flink.configuration.Configuration
@@ -10,6 +12,7 @@ import org.apache.flink.streaming.api.scala._
 import org.apache.flink.streaming.api.scala.function.WindowFunction
 import org.apache.flink.streaming.api.windowing.time.Time
 import org.apache.flink.streaming.api.windowing.windows.TimeWindow
+import org.apache.flink.streaming.connectors.kafka.FlinkKafkaConsumer
 import org.apache.flink.util.Collector
 
 import scala.collection.mutable.ListBuffer
@@ -30,6 +33,14 @@ case class ItemViewCount( itemId: Long, windowEnd: Long, count: Long )
 
 object HotItems {
   def main(args: Array[String]): Unit = {
+
+    val properties = new Properties()
+    properties.setProperty("bootstrap.servers", "localhost:9092")
+    properties.setProperty("group.id", "consumer-group")
+    properties.setProperty("key.deserializer", "org.apache.kafka.common.serialization.StringDeserializer")
+    properties.setProperty("value.deserializer", "org.apache.kafka.common.serialization.StringDeserializer")
+    properties.setProperty("auto.offset.reset", "latest")
+
     // 创建一个env
     val env = StreamExecutionEnvironment.getExecutionEnvironment
     // 显式地定义Time类型
@@ -37,7 +48,8 @@ object HotItems {
     env.setParallelism(1)
 
     val stream = env
-      .readTextFile("D:\\Projects\\BigData\\UserBehaviorAnalysis\\HotItemsAnalysis\\src\\main\\resources\\UserBehavior.csv")
+//      .readTextFile("D:\\Projects\\BigData\\UserBehaviorAnalysis\\HotItemsAnalysis\\src\\main\\resources\\UserBehavior.csv")
+      .addSource( new FlinkKafkaConsumer[String]("hotitems", new SimpleStringSchema(), properties) )
       .map(line => {
         val linearray = line.split(",")
         UserBehavior( linearray(0).toLong, linearray(1).toLong, linearray(2).toInt, linearray(3), linearray(4).toLong )
@@ -123,7 +135,7 @@ object HotItems {
       }
       result.append("====================================\n\n")
       // 控制输出频率
-      Thread.sleep(1000)
+      Thread.sleep(100)
       out.collect(result.toString)
     }
   }
